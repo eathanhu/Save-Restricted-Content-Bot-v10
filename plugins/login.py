@@ -9,10 +9,11 @@ import logging
 import os
 from config import API_HASH, API_ID
 from shared_client import app as bot
-from utils.func import save_user_session, get_user_data, remove_user_session, save_user_bot, remove_user_bot
+from utils.func import save_user_session, get_user_data, remove_user_session, save_user_bot, remove_user_bot, is_user_banned
 from utils.encrypt import ecs, dcs
 from plugins.batch import UB, UC
 from utils.custom_filters import login_in_progress, set_user_step, get_user_step
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 model = "v3saver Team SPY"
@@ -25,6 +26,15 @@ login_cache = {}
 @bot.on_message(filters.command('login'))
 async def login_command(client, message):
     user_id = message.from_user.id
+    
+    # Check if user is banned
+    if await is_user_banned(user_id):
+        await message.reply_text(
+            "🚫 **You are banned from using this bot!**\n\n"
+            "Contact @Franited to get unbanned."
+        )
+        return
+    
     set_user_step(user_id, STEP_PHONE)
     login_cache.pop(user_id, None)
     await message.delete()
@@ -38,12 +48,20 @@ Example: `+12345678900`"""
 @bot.on_message(filters.command("setbot"))
 async def set_bot_token(C, m):
     user_id = m.from_user.id
-    args = m.text.split(" ", 1)
+    
+    # Check if user is banned
+    if await is_user_banned(user_id):
+        await m.reply_text(
+            "🚫 **You are banned from using this bot!**\n\n"
+            "Contact @Franited to get unbanned."
+        )
+        return
+    
     if user_id in UB:
         try:
             await UB[user_id].stop()
             if UB.get(user_id, None):
-                del UB[user_id]  # Remove from dictionary
+                del UB[user_id]
                 
             try:
                 if os.path.exists(f"user_{user_id}.session"):
@@ -54,13 +72,13 @@ async def set_bot_token(C, m):
             print(f"Stopped and removed old bot for user {user_id}")
         except Exception as e:
             print(f"Error stopping old bot for user {user_id}: {e}")
-            del UB[user_id]  # Remove from dictionary
+            del UB[user_id]
 
-    if len(args) < 2:
-        await m.reply_text("⚠️ Please provide a bot token. Usage: `/setbto token`", quote=True)
+    if len(m.text.split()) < 2:
+        await m.reply_text("⚠️ Please provide a bot token. Usage: `/setbot token`", quote=True)
         return
 
-    bot_token = args[1].strip()
+    bot_token = m.text.split(maxsplit=1)[1].strip()
     await save_user_bot(user_id, bot_token)
     await m.reply_text("✅ Bot token saved successfully.", quote=True)
     
@@ -68,12 +86,21 @@ async def set_bot_token(C, m):
 @bot.on_message(filters.command("rembot"))
 async def rem_bot_token(C, m):
     user_id = m.from_user.id
+    
+    # Check if user is banned
+    if await is_user_banned(user_id):
+        await m.reply_text(
+            "🚫 **You are banned from using this bot!**\n\n"
+            "Contact @Franited to get unbanned."
+        )
+        return
+    
     if user_id in UB:
         try:
             await UB[user_id].stop()
             
             if UB.get(user_id, None):
-                del UB[user_id]  # Remove from dictionary # Remove from dictionary
+                del UB[user_id]
             print(f"Stopped and removed old bot for user {user_id}")
             try:
                 if os.path.exists(f"user_{user_id}.session"):
@@ -83,7 +110,7 @@ async def rem_bot_token(C, m):
         except Exception as e:
             print(f"Error stopping old bot for user {user_id}: {e}")
             if UB.get(user_id, None):
-                del UB[user_id]  # Remove from dictionary  # Remove from dictionary
+                del UB[user_id]
             try:
                 if os.path.exists(f"user_{user_id}.session"):
                     os.remove(f"user_{user_id}.session")
@@ -95,7 +122,8 @@ async def rem_bot_token(C, m):
     
 @bot.on_message(login_in_progress & filters.text & filters.private & ~filters.command([
     'start', 'batch', 'cancel', 'login', 'logout', 'stop', 'set', 'pay',
-    'redeem', 'gencode', 'generate', 'keyinfo', 'encrypt', 'decrypt', 'keys', 'setbot', 'rembot']))
+    'redeem', 'gencode', 'generate', 'keyinfo', 'encrypt', 'decrypt', 'keys', 
+    'setbot', 'rembot', 'clone', 'ban', 'unban', 'unbanall']))
 async def handle_login_steps(client, message):
     user_id = message.from_user.id
     text = message.text.strip()
@@ -116,14 +144,13 @@ async def handle_login_steps(client, message):
                 return
             await edit_message_safely(status_msg,
                 '🔄 Processing phone number...')
-            temp_client = Client(f'temp_{user_id}', api_id=API_ID, api_hash
-                =API_HASH, device_model=model, in_memory=True)
+            temp_client = Client(f'temp_{user_id}', api_id=API_ID, api_hash=API_HASH, 
+                device_model=model, in_memory=True)
             try:
                 await temp_client.connect()
                 sent_code = await temp_client.send_code(text)
                 login_cache[user_id]['phone'] = text
-                login_cache[user_id]['phone_code_hash'
-                    ] = sent_code.phone_code_hash
+                login_cache[user_id]['phone_code_hash'] = sent_code.phone_code_hash
                 login_cache[user_id]['temp_client'] = temp_client
                 set_user_step(user_id, STEP_CODE)
                 await edit_message_safely(status_msg,
@@ -171,8 +198,7 @@ Please enter your password:"""
         elif step == STEP_PASSWORD:
             temp_client = login_cache[user_id]['temp_client']
             try:
-                await edit_message_safely(status_msg, '🔄 Verifying password...'
-                    )
+                await edit_message_safely(status_msg, '🔄 Verifying password...')
                 await temp_client.check_password(text)
                 session_string = await temp_client.export_session_string()
                 encrypted_session = ecs(session_string)
@@ -198,6 +224,7 @@ Please try again with /login.""")
             await login_cache[user_id]['temp_client'].disconnect()
         login_cache.pop(user_id, None)
         set_user_step(user_id, None)
+
 async def edit_message_safely(message, text):
     """Helper function to edit message and handle errors"""
     try:
@@ -231,6 +258,15 @@ async def cancel_command(client, message):
 @bot.on_message(filters.command('logout'))
 async def logout_command(client, message):
     user_id = message.from_user.id
+    
+    # Check if user is banned
+    if await is_user_banned(user_id):
+        await message.reply_text(
+            "🚫 **You are banned from using this bot!**\n\n"
+            "Contact @Franited to get unbanned."
+        )
+        return
+    
     await message.delete()
     status_msg = await message.reply('🔄 Processing logout request...')
     try:
