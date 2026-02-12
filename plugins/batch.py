@@ -1,4 +1,12 @@
 # Clone command handler
+import signal
+import sys
+# Add signal handler for graceful shutdown
+def signal_handler(sig, frame):
+    print('\n⚠️ Interrupt received, cleaning up...')
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 @X.on_message(filters.command('clone'))
 async def clone_cmd(c, m):
     uid = m.from_user.id
@@ -195,3 +203,4 @@ async def clone_batch(c, m, base_link, start_msg, end_msg, uid, channel_id, link
         f"✅ Success: {success}\n"
         f"❌ Failed: {failed}"
     )
+
