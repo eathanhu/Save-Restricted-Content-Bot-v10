@@ -339,3 +339,58 @@ async def get_premium_details(user_id):
     except Exception as e:
         logger.error(f"Error getting premium details for {user_id}: {e}")
         return None
+
+# Ban management
+banned_users_collection = db["banned_users"]
+
+async def ban_user(user_id, banned_by):
+    """Ban a user"""
+    try:
+        await banned_users_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "user_id": user_id,
+                "banned_at": datetime.now(),
+                "banned_by": banned_by
+            }},
+            upsert=True
+        )
+        logger.info(f"User {user_id} banned by {banned_by}")
+        return True
+    except Exception as e:
+        logger.error(f"Error banning user {user_id}: {e}")
+        return False
+
+
+async def unban_user(user_id):
+    """Unban a user"""
+    try:
+        result = await banned_users_collection.delete_one({"user_id": user_id})
+        if result.deleted_count > 0:
+            logger.info(f"User {user_id} unbanned")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error unbanning user {user_id}: {e}")
+        return False
+
+
+async def unban_all_users():
+    """Unban all users"""
+    try:
+        result = await banned_users_collection.delete_many({})
+        logger.info(f"Unbanned {result.deleted_count} users")
+        return result.deleted_count
+    except Exception as e:
+        logger.error(f"Error unbanning all users: {e}")
+        return 0
+
+
+async def is_user_banned(user_id):
+    """Check if user is banned"""
+    try:
+        user = await banned_users_collection.find_one({"user_id": user_id})
+        return user is not None
+    except Exception as e:
+        logger.error(f"Error checking ban status for {user_id}: {e}")
+        return False
