@@ -7,8 +7,23 @@ from pyrogram import filters
 from pyrogram.errors import UserNotParticipant
 from pyrogram.types import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from config import LOG_GROUP, OWNER_ID, FORCE_SUB
+from utils.func import is_user_banned
+
+async def check_banned(client, message):
+    """Check if user is banned"""
+    if await is_user_banned(message.from_user.id):
+        await message.reply_text(
+            "🚫 **You are banned from using this bot!**\n\n"
+            "Contact @Franited to get unbanned."
+        )
+        return True
+    return False
 
 async def subscribe(app, message):
+    # Check if user is banned first
+    if await check_banned(app, message):
+        return 1
+        
     if FORCE_SUB:
         try:
           user = await app.get_chat_member(FORCE_SUB, message.from_user.id)
@@ -26,12 +41,16 @@ async def subscribe(app, message):
      
 @app.on_message(filters.command("set"))
 async def set(_, message):
+    if await check_banned(_, message):
+        return
+        
     if message.from_user.id not in OWNER_ID:
         await message.reply("You are not authorized to use this command.")
         return
      
     await app.set_bot_commands([
         BotCommand("start", "🚀 Start the bot"),
+        BotCommand("clone", "📥 Clone messages from channel"),
         BotCommand("batch", "🫠 Extract in bulk"),
         BotCommand("login", "🔑 Get into the bot"),
         BotCommand("setbot", "🧸 Add your bot for handling files"),
@@ -42,6 +61,9 @@ async def set(_, message):
         BotCommand("transfer", "💘 Gift premium to others"),
         BotCommand("add", "➕ Add user to premium"),
         BotCommand("rem", "➖ Remove from premium"),
+        BotCommand("ban", "🚫 Ban a user"),
+        BotCommand("unban", "✅ Unban a user"),
+        BotCommand("unbanall", "✅ Unban all users"),
         BotCommand("rembot", "🤨 Remove your custom bot"),
         BotCommand("settings", "⚙️ Personalize things"),
         BotCommand("plan", "🗓️ Check our premium plans"),
@@ -65,18 +87,18 @@ help_pages = [
         "> Remove user from premium (Owner only)\n\n"
         "3. **/transfer userID**\n"
         "> Transfer premium to your beloved major purpose for resellers (Premium members only)\n\n"
-        "4. **/get**\n"
-        "> Get all user IDs (Owner only)\n\n"
-        "5. **/lock**\n"
-        "> Lock channel from extraction (Owner only)\n\n"
-        "6. **/dl link**\n"
+        "4. **/clone link or link-link**\n"
+        "> Clone messages from public/private channels\n\n"
+        "5. **/ban userID**\n"
+        "> Ban a user (Owner only)\n\n"
+        "6. **/unban userID**\n"
+        "> Unban a user (Owner only)\n\n"
+        "7. **/dl link**\n"
         "> Download videos (Not available in v3 if you are using)\n\n"
-        "7. **/adl link**\n"
+        "8. **/adl link**\n"
         "> Download audio (Not available in v3 if you are using)\n\n"
-        "8. **/login**\n"
+        "9. **/login**\n"
         "> Log into the bot for private channel access\n\n"
-        "9. **/batch**\n"
-        "> Bulk extraction for posts (After login)\n\n"
     ),
     (
         "📝 **Bot Commands Overview (2/2)**:\n\n"
@@ -97,12 +119,7 @@ help_pages = [
         "17. **/session**\n"
         "> Generate Pyrogram V2 session\n\n"
         "18. **/settings**\n"
-        "> 1. SETCHATID : To directly upload in channel or group or user's dm use it with -100[chatID]\n"
-        "> 2. SETRENAME : To add custom rename tag or username of your channels\n"
-        "> 3. CAPTION : To add custom caption\n"
-        "> 4. REPLACEWORDS : Can be used for words in deleted set via REMOVE WORDS\n"
-        "> 5. RESET : To set the things back to default\n\n"
-        "> You can set CUSTOM THUMBNAIL, PDF WATERMARK, VIDEO WATERMARK, SESSION-based login, etc. from settings\n\n"
+        "> Customize bot settings\n\n"
         "**__Powered by Team SPY__**"
     )
 ]
@@ -112,24 +129,19 @@ async def send_or_edit_help_page(_, message, page_number):
     if page_number < 0 or page_number >= len(help_pages):
         return
  
-     
     prev_button = InlineKeyboardButton("◀️ Previous", callback_data=f"help_prev_{page_number}")
     next_button = InlineKeyboardButton("Next ▶️", callback_data=f"help_next_{page_number}")
  
-     
     buttons = []
     if page_number > 0:
         buttons.append(prev_button)
     if page_number < len(help_pages) - 1:
         buttons.append(next_button)
  
-     
     keyboard = InlineKeyboardMarkup([buttons])
  
-     
     await message.delete()
  
-     
     await message.reply(
         help_pages[page_number],
         reply_markup=keyboard
@@ -138,6 +150,9 @@ async def send_or_edit_help_page(_, message, page_number):
  
 @app.on_message(filters.command("help"))
 async def help(client, message):
+    if await check_banned(client, message):
+        return
+        
     join = await subscribe(client, message)
     if join == 1:
         return
@@ -161,6 +176,9 @@ async def on_help_navigation(client, callback_query):
  
 @app.on_message(filters.command("terms") & filters.private)
 async def terms(client, message):
+    if await check_banned(client, message):
+        return
+        
     terms_text = (
         "> 📜 **Terms and Conditions** 📜\n\n"
         "✨ We are not responsible for user deeds, and we do not promote copyrighted content. If any user engages in such activities, it is solely their responsibility.\n"
@@ -179,6 +197,9 @@ async def terms(client, message):
  
 @app.on_message(filters.command("plan") & filters.private)
 async def plan(client, message):
+    if await check_banned(client, message):
+        return
+        
     plan_text = (
         "> 💰 **Premium Price**:\n\n Starting from $2 or 200 INR accepted via **__Amazon Gift Card__** (terms and conditions apply).\n"
         "📥 **Download Limit**: Users can download up to 100,000 files in a single batch command.\n"
@@ -231,5 +252,97 @@ async def see_terms(client, callback_query):
         ]
     )
     await callback_query.message.edit_text(terms_text, reply_markup=buttons)
- 
- 
+
+
+# Ban/Unban commands
+@app.on_message(filters.command("ban") & filters.private)
+async def ban_user_cmd(client, message):
+    if message.from_user.id not in OWNER_ID:
+        await message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.reply_text("Usage: `/ban user_id` or `/ban @username`")
+        return
+    
+    target = args[1]
+    
+    try:
+        # Try to get user ID from username or ID
+        if target.startswith('@'):
+            user = await client.get_users(target)
+            target_id = user.id
+            target_name = user.first_name
+        else:
+            target_id = int(target)
+            try:
+                user = await client.get_users(target_id)
+                target_name = user.first_name
+            except:
+                target_name = "Unknown"
+        
+        from utils.func import ban_user
+        success = await ban_user(target_id, message.from_user.id)
+        
+        if success:
+            await message.reply_text(f"✅ User {target_name} ({target_id}) has been banned.")
+        else:
+            await message.reply_text("❌ Failed to ban user.")
+    except ValueError:
+        await message.reply_text("❌ Invalid user ID.")
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
+
+@app.on_message(filters.command("unban") & filters.private)
+async def unban_user_cmd(client, message):
+    if message.from_user.id not in OWNER_ID:
+        await message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.reply_text("Usage: `/unban user_id` or `/unban @username`")
+        return
+    
+    target = args[1]
+    
+    try:
+        if target.startswith('@'):
+            user = await client.get_users(target)
+            target_id = user.id
+            target_name = user.first_name
+        else:
+            target_id = int(target)
+            try:
+                user = await client.get_users(target_id)
+                target_name = user.first_name
+            except:
+                target_name = "Unknown"
+        
+        from utils.func import unban_user
+        success = await unban_user(target_id)
+        
+        if success:
+            await message.reply_text(f"✅ User {target_name} ({target_id}) has been unbanned.")
+        else:
+            await message.reply_text("❌ User was not banned.")
+    except ValueError:
+        await message.reply_text("❌ Invalid user ID.")
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
+
+@app.on_message(filters.command("unbanall") & filters.private)
+async def unban_all_cmd(client, message):
+    if message.from_user.id not in OWNER_ID:
+        await message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    try:
+        from utils.func import unban_all_users
+        count = await unban_all_users()
+        await message.reply_text(f"✅ Unbanned {count} users.")
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
